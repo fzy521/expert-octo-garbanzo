@@ -8,8 +8,8 @@ from contextlib import closing
 DATABASE = '/home/crcc/flaskr/tmp/flaskr.db'
 DEBUG = True
 SECRET_KEY = 'development key'
-USERNAME = 'admin'
-PASSWORD = 'admin'
+USERNAMES = ['admin','admin1',]  #尝试用list来实现多用户功能
+PASSWORDS = ['admin','admin1',]
 
 # create our little application :)
 app = Flask(__name__)
@@ -57,9 +57,9 @@ def add_entry():
 def login():
     error = None
     if request.method == 'POST':
-        if request.form['username'] != app.config['USERNAME']:
+        if request.form['username'] not in app.config['USERNAMES']:
             error = 'Invalid username'
-        elif request.form['password'] != app.config['PASSWORD']:
+        elif request.form['password'] != app.config['PASSWORDS[USERNAMES.index(request.form['username'])]']:#尝试通过list实现多用户登陆
             error = 'Invalid password'
         else:
             session['logged_in'] = True
