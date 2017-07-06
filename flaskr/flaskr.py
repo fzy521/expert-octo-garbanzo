@@ -57,16 +57,16 @@ def add_entry():
 def login():
     error = None
     if request.method == 'POST':
-        if request.form['username'] not in app.config['USERNAMES']:
+       if request.form['username'] not in app.config['USERNAMES']:
             error = 'Invalid username'
-           else：
-               user_index = USERNAMES.index(str(request.form['username']))
-        elif request.form['password'] != app.config['PASSWORDS[user_index]']:#尝试通过list实现多用户登陆
-            error = 'Invalid password'
-        else:
-            session['logged_in'] = True
-            flash('You were logged in')
-            return redirect(url_for('show_entries'))
+       else:
+            user_index = USERNAMES.index(str(request.form['username']))
+            if request.form['password'] != app.config['PASSWORDS'][user_index]:#尝试通过list实现多用户登陆
+                 error = 'Invalid password'
+            else:
+                session['logged_in'] = True
+                flash('You were logged in')
+                return redirect(url_for('show_entries'))
     return render_template('login.html', error=error)
 
 @app.route('/logout')
