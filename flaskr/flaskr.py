@@ -1,22 +1,30 @@
 # all the imports
+import os
 import sqlite3
-from flask import Flask, request, session, g, redirect, url_for, \
-     abort, render_template, flash
+from flask import Flask, request, session, g, redirect, url_for, abort, \
+     render_template, flash
 from contextlib import closing
 
-# configuration
-DATABASE = '/home/crcc/flaskr/tmp/flaskr.db'
-DEBUG = True
-SECRET_KEY = 'development key'
-USERNAMES = ['admin','admin1',]  #尝试用list来实现多用户功能
-PASSWORDS = ['admin','admin1',]
 
 # create our little application :)
 app = Flask(__name__)
 app.config.from_object(__name__)
 
+# Load default config and override config from an environment variable
+app.config.update(dict(
+    DATABASE=os.path.join(app.root_path, 'tmp/flaskr.db'),
+    SECRET_KEY='development key',
+    USERNAMES = ['admin','admin1',],  #尝试用list来实现多用户功能
+    PASSWORDS = ['admin','admin1',]
+    ))
+
+app.config.from_envvar('FLASKR_SETTINGS', silent=True)
+
 def connect_db():
-    return sqlite3.connect(app.config['DATABASE'])
+    """Connects to the specific database."""
+    rv = sqlite3.connect(app.config['DATABASE'])
+    rv.row_factory = sqlite3.Row
+    return rv
 
 def init_db():
     with closing(connect_db()) as db:
@@ -24,8 +32,30 @@ def init_db():
             db.cursor().executescript(f.read())
         db.commit()
 
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    if not hasattr(g, 'sqlite_db'):
+        g.sqlite_db = connect_db()
+    return g.sqlite_db
+
+
+@app.cli.command('initdb')
+def initdb_command():
+    """Initializes the database."""
+    init_db()
+    print('Initialized the database.')
+
 if __name__ == '__main__':
     app.run()
+
+@app.teardown_appcontext #进程结束时关闭数据库连接
+def close_db(error):
+    """Closes the database again at the end of the request."""
+    if hasattr(g, 'sqlite_db'):
+        g.sqlite_db.close()
+
 
 @app.before_request
 def before_request():
@@ -37,19 +67,23 @@ def teardown_request(exception):
     if db is not None:
         db.close()
 
+
 @app.route('/')
 def show_entries():
-    cur = g.db.execute('select title, text from entries order by id desc')
-    entries = [dict(title=row[0], text=row[1]) for row in cur.fetchall()]
+    db = get_db()
+    cur = db.execute('select title, text from entries order by id desc')
+    entries = cur.fetchall()
     return render_template('show_entries.html', entries=entries)
+
 
 @app.route('/add', methods=['POST'])
 def add_entry():
     if not session.get('logged_in'):
         abort(401)
-    g.db.execute('insert into entries (title, text) values (?, ?)',
+    db = get_db()
+    db.execute('insert into entries (title, text) values (?, ?)',
                  [request.form['title'], request.form['text']])
-    g.db.commit()
+    db.commit()
     flash('New entry was successfully posted')
     return redirect(url_for('show_entries'))
 
@@ -60,7 +94,7 @@ def login():
        if request.form['username'] not in app.config['USERNAMES']:
             error = 'Invalid username'
        else:
-            user_index = USERNAMES.index(str(request.form['username']))
+            user_index = app.config['USERNAMES'].index(str(request.form['username']))
             if request.form['password'] != app.config['PASSWORDS'][user_index]:#尝试通过list实现多用户登陆
                  error = 'Invalid password'
             else:
